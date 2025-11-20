@@ -1,0 +1,11 @@
+/.lake
+# Build output
+/build
+# Lake/Lean package output
+/lake-packages
+/lake-manifest.json
+
+# Editor junk
+*.swp
+*.swo
+.DS_Store

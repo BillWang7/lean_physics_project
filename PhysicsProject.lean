@@ -27,7 +27,7 @@ lemma deriv_KE {m : ℝ} {x : Trajectory} (hv : Differentiable ℝ (vel x)):
       simpa [acc] using deriv_inner_apply (𝕜 := ℝ) (f := vel x) (g := vel x) (x := t) hf hg
     rw [this]
 
-    -- inner product space is symmetric
+    -- Inner product space is symmetric
     funext t
     have hsymm : ⟪vel x t, acc x t⟫ = ⟪acc x t, vel x t⟫ := by
       simpa using real_inner_comm (acc x t) (vel x t)
@@ -79,7 +79,7 @@ theorem KE_work_thm {m : ℝ} {x : Trajectory}
         intro t ht
         exact hdiff_all.differentiableAt
 
-  -- 3b. Continuity of f' = fun t ↦ ⟪F t, vel x t⟫ on the interval
+  -- Continuity of f' = fun t ↦ ⟪F t, vel x t⟫ on the interval
     have hvel_cont : Continuous (vel x) := hv.continuous
   -- continuity of the inner product of two continuous maps
   -- continuity of the integrand t ↦ ⟪F t, vel x t⟫
@@ -92,8 +92,7 @@ theorem KE_work_thm {m : ℝ} {x : Trajectory}
         ContinuousOn (fun t ↦ ⟪F t, vel x t⟫) (Set.uIcc t₀ t₁) :=
             hFprime_cont.continuousOn
 
-  -- 4. Apply the Fundamental Theorem of Calculus:
-  --    ∫ f' = f(b) - f(a)
+  -- 4. Apply FTC
     have hFTC :
       ∫ t in t₀..t₁, (fun t ↦ ⟪F t, vel x t⟫) t
         = kineticEnergy m x t₁ - kineticEnergy m x t₀ :=
@@ -108,14 +107,111 @@ theorem KE_work_thm {m : ℝ} {x : Trajectory}
 
 
 
+lemma deriv_momentum_particle {m : ℝ} {x : Trajectory}
+    (hv : Differentiable ℝ (vel x)) :
+    deriv (momentum m x) = fun t ↦ m • acc x t := by
+  -- unfold the definitions
+  unfold momentum acc vel
+  funext t
+  -- hv gives pointwise differentiability of vel
+  have hvat : DifferentiableAt ℝ (vel x) t := hv.differentiableAt
+  -- hasDerivAt for vel x, with derivative deriv (vel x) t
+  have hHas : HasDerivAt (vel x) (deriv (vel x) t) t := hvat.hasDerivAt
+  -- scale by m using HasDerivAt.const_smul
+  have hHas' : HasDerivAt (fun s ↦ m • vel x s) (m • deriv (vel x) t) t :=
+    hHas.const_smul m
+  -- turn that into an equality on deriv
+  have hDeriv := hHas'.deriv
+  -- RHS is m • deriv (vel x) t, which is m • acc x t
+  simpa using hDeriv
 
 
-/-- If the acceleration is zero for all time, then momentum is constant in time. -/
-theorem conserv_of_momentum {m : ℝ} {x : Trajectory}
-    (hm : 0 < m) (hx : Differentiable ℝ x)
-    (hF : ∀ t, acc x t = 0) :
-    ∀ t, deriv (momentum m x) t = 0 := by
-    sorry
+/-- If there is no net external force, then momentum is constant in time. -/
+theorem conserv_of_momentum_free_particle
+    {m : ℝ} {x : Trajectory} {F : ℝ → R3}
+    (hv : Differentiable ℝ (vel x))
+    (hN : NewtonsLaw m F x)
+    (hFzero : ∀ t, F t = 0)
+    {t₀ t₁ : ℝ} :
+    momentum m x t₁ = momentum m x t₀ := by
+  -------------------------------------------------------------------
+  -- Step 1: derivative of momentum, and identify it with F via Newton
+  -------------------------------------------------------------------
+  have hDerivMom := deriv_momentum_particle (m := m) (x := x) hv
+  -- hDerivMom : deriv (momentum m x) = fun t ↦ m • acc x t
+
+  -- Use Newton's law: F t = m • acc x t
+  have hDeriv_eq_F : deriv (momentum m x) = F := by
+    funext t
+    have hpoint := congrArg (fun f => f t) hDerivMom
+    -- hpoint : deriv (momentum m x) t = m • acc x t
+    have hNt : F t = m • acc x t := hN t
+    -- Rewrite RHS as F t
+    simpa [hNt] using hpoint
+
+  -- But the force is identically zero
+  have hF_eq_zero : F = fun _ : ℝ => (0 : R3) := by
+    funext t
+    exact hFzero t
+
+  -- So the derivative of momentum is identically zero
+  have hDeriv_zero : deriv (momentum m x) = fun _ : ℝ => (0 : R3) := by
+    simpa [hF_eq_zero] using hDeriv_eq_F
+
+  -------------------------------------------------------------------
+  -- Step 2: apply FTC to get: ∫ deriv(momentum) = momentum(t₁) - momentum(t₀)
+  -------------------------------------------------------------------
+  -- First, build the hypotheses for FTC
+
+  -- global differentiability of momentum
+  have hdiff_all : Differentiable ℝ (momentum m x) := by
+    -- from hv : Differentiable ℝ (vel x) and momentum = m • vel x
+    simpa [momentum] using hv.const_smul m
+
+  -- pointwise differentiability on the closed interval [[t₀, t₁]]
+  have hdiff : ∀ t ∈ Set.uIcc t₀ t₁,
+      DifferentiableAt ℝ (momentum m x) t := by
+    intro t ht
+    exact (hdiff_all t)
+
+  -- continuity of f' (which is just the constant zero map)
+  have hcont : ContinuousOn (fun _ : ℝ => (0 : R3)) (Set.uIcc t₀ t₁) := by
+    -- constant function is continuous everywhere, hence continuous on uIcc
+    simpa using
+      (continuous_const.continuousOn : ContinuousOn (fun _ : ℝ => (0 : R3)) (Set.uIcc t₀ t₁))
+
+  -- FTC for vector-valued function momentum m x : ℝ → R3
+  have hFTC :=
+    intervalIntegral.integral_deriv_eq_sub'
+      (f := momentum m x)
+      (f' := fun _ : ℝ => (0 : R3))
+      (a := t₀) (b := t₁)
+      hDeriv_zero
+      hdiff
+      hcont
+  -- hFTC : ∫ t in t₀..t₁, (fun _ => (0 : R3)) t = momentum m x t₁ - momentum m x t₀
+
+  -------------------------------------------------------------------
+  -- Step 3: integral of zero is zero, so the difference of momenta is zero
+  -------------------------------------------------------------------
+  have hIntZero : ∫ t in t₀..t₁, (fun _ : ℝ => (0 : R3)) t = (0 : R3) := by
+    simp
+
+  -- From FTC: 0 = momentum t₁ - momentum t₀
+  have hDiffZero : momentum m x t₁ - momentum m x t₀ = (0 : R3) := by
+    -- first get 0 = momentum t₁ - momentum t₀
+    have h : (0 : R3) = momentum m x t₁ - momentum m x t₀ := by
+      simpa [hIntZero] using hFTC
+    -- now flip the sides
+    simpa [eq_comm] using h
+
+  -------------------------------------------------------------------
+  -- Step 4: rearrange (a - b = 0) to get a = b
+  -------------------------------------------------------------------
+  -- Add momentum m x t₀ to both sides:
+  have hEq := congrArg (fun v => v + momentum m x t₀) hDiffZero
+  -- LHS simplifies to momentum m x t₁, RHS to momentum m x t₀
+  simpa [sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using hEq
 
 end
 end Physics

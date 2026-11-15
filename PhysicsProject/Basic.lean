@@ -1,4 +1,4 @@
-import MathLib.Tactic
+import Mathlib.Tactic
 
 namespace Physics
 noncomputable section

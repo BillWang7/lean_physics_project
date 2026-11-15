@@ -3,9 +3,6 @@
 /build
 # Lake/Lean package output
 /lake-packages
-/lake-manifest.json
-/eval "$(ssh-agent -s)"
-/eval "$(ssh-agent -s)".pub
 
 # Editor junk
 *.swp
